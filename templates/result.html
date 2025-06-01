@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Tracking Result and Advice Prediction</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Price Tracking Result</h1>
+    <p>Tracked price: {{ price }}</p>
+    <p>Advice: {{ advice }}</p>
+    <h2>Historical Data</h2>
+    <p>Highest Price: {{ stats.highest }}</p>
+    <p>Lowest Price: {{ stats.lowest }}</p>
+    <p>Average Price: {{ stats.average }}</p>
+    <div id="price-chart"></div>
+    <script>
+        var data = {{ chart_data | safe }};
+        var layout = {
+            title: 'Historical Price Data ',
+            xaxis: { title: 'Date' },
+            yaxis: { title: 'Price' }
+        };
+        Plotly.newPlot('price-chart', data, layout);
+    </script>
+</body>
+</html>
