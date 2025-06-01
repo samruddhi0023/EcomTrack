@@ -23,7 +23,7 @@ EcomTrack is an **eCommerce price tracker and buying adviser** that helps users 
 ![Price Trend](screenshots/price-trend.png)  
 
 ### **Buying Recommendation ✅**  
-![Buying Advice](screenshots/buy-advice.png)  
+![Buying Advice](screenshots/price-trend.jpg)  
 
 ## Installation  
 1. Clone the repository:  
