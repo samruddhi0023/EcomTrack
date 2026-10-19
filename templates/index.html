@@ -1,16 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amazon Price Tracker</title>
-</head>
-<body>
-    <h1>SmartDeal: Amazon Price Tracker And Buying Advisor</h1>
-    <form action="/track" method="post">
-        <label for="url">Product URL:</label>
-        <input type="text" id="url" name="url" required>
-        <button type="submit">Track Price</button>
+{% extends "base.html" %}
+{% block head %}
+<style>
+  .hero { padding:28px 0 30px; max-width:720px; }
+  .hero h1 { font-size:clamp(2.2rem,6vw,3.6rem); margin-bottom:12px; }
+  .hero p { font-size:1.1rem; margin:0 0 22px; max-width:52ch; }
+  details.manual { margin-top:14px; } details.manual summary { cursor:pointer; color:var(--muted); font-size:.92rem; }
+  details.manual .inline { margin-top:12px; }
+  .fix { border-color:var(--tag); border-width:2px; margin-bottom:24px; }
+  .fix h2 { font-size:1.2rem; margin-bottom:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:16px; margin-top:14px; }
+  .pcard { display:flex; flex-direction:column; gap:12px; text-decoration:none; }
+  .pcard:hover { border-color:var(--muted); }
+  .pcard h3 { font-size:1.02rem; font-family:var(--body); font-weight:600; letter-spacing:0; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .prow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .spark { width:110px; height:36px; flex:none; } .spark polyline { fill:none; stroke:var(--ink); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; opacity:.75; }
+  .meta { display:flex; justify-content:space-between; align-items:center; font-size:.85rem; color:var(--muted); }
+  .down { color:var(--buy); font-weight:600; } .up { color:var(--wait); font-weight:600; }
+  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-top:8px; }
+  .steps div { border-left:3px solid var(--tag); padding-left:14px; } .steps b { display:block; font-family:var(--display); font-size:1.05rem; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Know when to buy.</h1>
+  <p class="muted">Paste a product link. EcomTrack records its price over time and tells you whether to buy now or wait.</p>
+
+  {% if ask_manual %}
+  <div class="card fix">
+    <h2>Enter the price yourself</h2>
+    <p class="muted" style="margin:0 0 14px">The shop wouldn't give us the price automatically. Type what you see on the page and it will be tracked like any other.</p>
+    <form action="{{ url_for('track') }}" method="post" class="stack">
+      <input type="hidden" name="url" value="{{ url }}">
+      <div><label for="mp">Price</label><input id="mp" type="number" step="0.01" min="0" name="manual_price" required autofocus placeholder="5390"></div>
+      <div><label for="mt">Product name (optional)</label><input id="mt" type="text" name="title" placeholder="Study table"></div>
+      <button class="btn tag">Save price and track</button>
     </form>
-</body>
-</html>
+  </div>
+  {% else %}
+  <form action="{{ url_for('track') }}" method="post">
+    <label for="url" class="muted" style="font-weight:500">Product link</label>
+    <div class="inline">
+      <input id="url" type="text" name="url" required placeholder="https://www.amazon.in/dp/B0XXXXXXXX" autocomplete="off">
+      <button class="btn tag">Track price</button>
+    </div>
+    <details class="manual">
+      <summary>Know the price already? Enter it yourself</summary>
+      <div class="inline"><input type="number" step="0.01" min="0" name="manual_price" placeholder="Current price, e.g. 5390" aria-label="Current price"></div>
+    </details>
+  </form>
+  {% endif %}
+</section>
+
+{% if products %}
+<section>
+  <h2 style="font-size:1.4rem">Your products</h2>
+  <div class="grid">
+    {% for p in products %}
+    <a class="card pcard" href="{{ url_for('product', pid=p.id) }}">
+      <h3>{{ p.title }}</h3>
+      <div class="prow">
+        <span class="pricetag sm">{{ p.price|money(p.url) }}</span>
+        {% if p.spark %}<svg class="spark" viewBox="0 0 120 36" aria-hidden="true"><polyline points="{{ p.spark }}"/></svg>{% endif %}
+      </div>
+      <div class="meta">
+        <span>
+          {% if p.change is not none and p.change|abs >= 0.05 %}<span class="{{ 'down' if p.change < 0 else 'up' }}">{{ '%+.1f'|format(p.change) }}%</span> since last check{% else %}{{ p.n }} price{{ '' if p.n == 1 else 's' }} recorded{% endif %}
+        </span>
+        <span class="badge {{ p.verdict }}">{{ {'buy':'Buy now','wait':'Wait','info':'Needs history'}[p.verdict] }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<section class="card">
+  <h2 style="font-size:1.2rem;margin-bottom:14px">How it works</h2>
+  <div class="steps">
+    <div><b>Paste a link</b><span class="muted">Any product page. Amazon links work best.</span></div>
+    <div><b>We record the price</b><span class="muted">Refresh any time to add a new point. Import past prices to start with history.</span></div>
+    <div><b>Get a clear answer</b><span class="muted">Buy now or wait, based on the trend, the average and the lowest price.</span></div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

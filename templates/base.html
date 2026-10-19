@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}EcomTrack - know when to buy{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper:#edf0f4; --card:#fff; --ink:#14213d; --muted:#5b6b82; --line:#d6dce6; --field:#f6f8fb;
+      --tag:#ffb703; --tag-ink:#3a2a00;
+      --buy:#14804a; --buy-bg:#dcf2e6; --wait:#a64b06; --wait-bg:#fde9d0; --info:#3b4fb8; --info-bg:#e3e8fb;
+      --err:#b3261e; --err-bg:#fbe4e2; --shadow:0 1px 2px rgba(20,33,61,.06);
+      --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+      --body:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) { :root {
+      --paper:#0d1524; --card:#152036; --ink:#e8edf5; --muted:#93a1b9; --line:#26334d; --field:#0f192d;
+      --tag:#ffc233; --tag-ink:#2c1f00;
+      --buy:#5be0a2; --buy-bg:#123a29; --wait:#ffb366; --wait-bg:#3e2a12; --info:#9fb0ff; --info-bg:#1f2850;
+      --err:#ff9a92; --err-bg:#3d1a18; --shadow:none;
+    } }
+    * { box-sizing:border-box; }
+    html { -webkit-text-size-adjust:100%; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.55 var(--body); }
+    a { color:inherit; }
+    :focus-visible { outline:3px solid var(--tag); outline-offset:2px; border-radius:6px; }
+    .wrap { max-width:1040px; margin:0 auto; padding:0 20px; }
+    header.top { padding:18px 0; }
+    header.top a { display:inline-flex; align-items:center; gap:10px; text-decoration:none; font:700 1.25rem var(--display); letter-spacing:-.01em; }
+    .mark { width:26px; height:26px; background:var(--tag); clip-path:polygon(7px 0,100% 0,100% 100%,7px 100%,0 50%); display:inline-block; }
+    h1,h2,h3 { font-family:var(--display); line-height:1.1; letter-spacing:-.02em; margin:0; }
+    .muted { color:var(--muted); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; box-shadow:var(--shadow); }
+    .stack > * + * { margin-top:18px; }
+
+    /* forms */
+    label { display:block; font-weight:600; font-size:.92rem; margin-bottom:6px; }
+    input[type=text], input[type=url], input[type=number], textarea {
+      width:100%; font:inherit; color:var(--ink); background:var(--field); border:1.5px solid var(--line);
+      border-radius:10px; padding:12px 14px; }
+    input:focus, textarea:focus { outline:none; border-color:var(--tag); box-shadow:0 0 0 3px color-mix(in srgb, var(--tag) 35%, transparent); }
+    textarea { min-height:110px; resize:vertical; font-family:ui-monospace,Consolas,monospace; font-size:.9rem; }
+    .btn { font:600 1rem var(--body); border:0; border-radius:10px; padding:12px 20px; cursor:pointer; background:var(--ink); color:var(--paper); white-space:nowrap; }
+    .btn:hover { filter:brightness(1.12); }
+    .btn.tag { background:var(--tag); color:var(--tag-ink); }
+    .btn.quiet { background:transparent; color:var(--ink); border:1.5px solid var(--line); }
+    .btn.danger { background:transparent; color:var(--err); border:1.5px solid var(--line); }
+    .btn.sm { padding:8px 14px; font-size:.9rem; }
+    .inline { display:flex; gap:10px; }
+    .inline > input { flex:1; min-width:0; }
+    .hint { font-size:.88rem; color:var(--muted); margin-top:6px; }
+
+    /* flashes */
+    .flash { display:flex; gap:10px; padding:12px 16px; border-radius:10px; margin-bottom:16px; font-size:.95rem; border:1px solid transparent; }
+    .flash.error { background:var(--err-bg); color:var(--err); border-color:color-mix(in srgb,var(--err) 30%,transparent); }
+    .flash.ok { background:var(--buy-bg); color:var(--buy); }
+
+    /* badges */
+    .badge { display:inline-block; font-weight:700; font-size:.82rem; padding:3px 10px; border-radius:999px; }
+    .badge.buy { background:var(--buy-bg); color:var(--buy); }
+    .badge.wait { background:var(--wait-bg); color:var(--wait); }
+    .badge.info { background:var(--info-bg); color:var(--info); }
+
+    /* the one bold element: price tag */
+    .pricetag { position:relative; display:inline-block; background:var(--tag); color:var(--tag-ink);
+      font:700 clamp(2rem,6vw,3rem)/1 var(--display); letter-spacing:-.03em;
+      padding:14px 22px 14px 40px; clip-path:polygon(24px 0,100% 0,100% 100%,24px 100%,0 50%); }
+    .pricetag::before { content:""; position:absolute; left:20px; top:50%; width:10px; height:10px; margin-top:-5px; border-radius:50%; background:var(--card); }
+    .pricetag.sm { font-size:1.25rem; padding:7px 14px 7px 28px; clip-path:polygon(15px 0,100% 0,100% 100%,15px 100%,0 50%); }
+    .pricetag.sm::before { left:13px; width:7px; height:7px; margin-top:-3.5px; }
+    @media (max-width:560px) { .inline { flex-direction:column; } .btn { width:100%; } }
+    @media (prefers-reduced-motion: no-preference) { .btn { transition:filter .15s; } }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="top"><div class="wrap"><a href="{{ url_for('home') }}"><span class="mark" aria-hidden="true"></span>EcomTrack</a></div></header>
+<main class="wrap">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="wrap muted" style="padding:40px 20px;font-size:.85rem">Prices are read from the shop's page when you track or refresh. Advice is a simple trend check, not a guarantee.</footer>
+</body>
+</html>

@@ -1,28 +1,190 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Price Tracking Result and Advice Prediction</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-</head>
-<body>
-    <h1>Price Tracking Result</h1>
-    <p>Tracked price: {{ price }}</p>
-    <p>Advice: {{ advice }}</p>
-    <h2>Historical Data</h2>
-    <p>Highest Price: {{ stats.highest }}</p>
-    <p>Lowest Price: {{ stats.lowest }}</p>
-    <p>Average Price: {{ stats.average }}</p>
-    <div id="price-chart"></div>
-    <script>
-        var data = {{ chart_data | safe }};
-        var layout = {
-            title: 'Historical Price Data ',
-            xaxis: { title: 'Date' },
-            yaxis: { title: 'Price' }
-        };
-        Plotly.newPlot('price-chart', data, layout);
-    </script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}{{ title }} - EcomTrack{% endblock %}
+{% block head %}
+<style>
+  .back { display:inline-block; margin-bottom:14px; color:var(--muted); text-decoration:none; font-size:.92rem; } .back:hover { color:var(--ink); }
+  .head h1 { font-size:clamp(1.4rem,3.4vw,2rem); max-width:30ch; }
+  .head .src { font-size:.85rem; color:var(--muted); display:block; margin:6px 0 20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+  .verdict { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .verdict .say { flex:1; min-width:220px; } .verdict .say b { font-family:var(--display); font-size:1.35rem; display:block; letter-spacing:-.01em; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-top:18px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .tile span { color:var(--muted); font-size:.85rem; display:block; } .tile b { font:700 1.5rem var(--display); letter-spacing:-.02em; } .tile small { color:var(--muted); display:block; font-size:.8rem; }
+  .demo { background:var(--info-bg); color:var(--info); border-radius:10px; padding:10px 14px; margin-top:18px; font-size:.92rem; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+  .chartbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; flex-wrap:wrap; }
+  .seg { display:inline-flex; border:1.5px solid var(--line); border-radius:10px; overflow:hidden; }
+  .seg button { background:none; border:0; padding:6px 14px; font:600 .88rem var(--body); color:var(--muted); cursor:pointer; }
+  .seg button[aria-pressed=true] { background:var(--ink); color:var(--paper); }
+  .legend { font-size:.82rem; color:var(--muted); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:18px; height:0; border-top:2px solid var(--ink); vertical-align:middle; margin-right:5px; } .legend i.d { border-top-style:dashed; border-color:var(--muted); }
+  #chart { position:relative; width:100%; height:320px; touch-action:pan-y; }
+  #chart svg { width:100%; height:100%; display:block; overflow:visible; }
+  #tip { position:absolute; pointer-events:none; background:var(--ink); color:var(--paper); font-size:.82rem; padding:6px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-120%); display:none; }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-top:16px; align-items:start; }
+  .cols h3 { font-size:1.1rem; margin-bottom:6px; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; } th { text-align:left; color:var(--muted); font-weight:500; padding:6px 0; } td { padding:7px 0; border-top:1px solid var(--line); } td:last-child, th:last-child { text-align:right; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; } .row form { margin:0; }
+  .links { margin-top:10px; font-size:.9rem; } .links a { color:var(--info); }
+</style>
+{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('home') }}">&larr; All products</a>
+
+<div class="head">
+  <h1>{{ title }}</h1>
+  <a class="src" href="{{ product.url }}" target="_blank" rel="noopener">{{ product.url }}</a>
+</div>
+
+<div class="card verdict">
+  <div class="pricetag">{{ price|money(product.url) }}</div>
+  <div class="say">
+    <span class="badge {{ verdict }}">{{ {'buy':'Buy now','wait':'Wait','info':'Needs history'}[verdict] }}</span>
+    <b>{{ advice }}</b>
+    {% if predicted %}<span class="muted">Projected next price: {{ predicted|money(product.url) }}</span>{% endif %}
+  </div>
+  <form action="{{ url_for('refresh', pid=product.id) }}" method="post"><button class="btn quiet">Refresh price</button></form>
+</div>
+
+{% if has_demo %}
+<div class="demo"><span>This chart includes simulated sample history, not real prices.</span>
+  <form action="{{ url_for('clear_sample', pid=product.id) }}" method="post"><button class="btn quiet sm">Remove sample data</button></form></div>
+{% endif %}
+
+<div class="tiles">
+  <div class="tile"><span>Lowest</span><b>{{ stats.lowest|money(product.url) }}</b><small>{{ lowest_when.strftime('%d %b %Y') }}</small></div>
+  <div class="tile"><span>Average</span><b>{{ stats.average|money(product.url) }}</b><small>across {{ count }} record{{ '' if count == 1 else 's' }}</small></div>
+  <div class="tile"><span>Highest</span><b>{{ stats.highest|money(product.url) }}</b></div>
+  <div class="tile"><span>Now vs average</span>
+    {% set d = (price - stats.average) / stats.average * 100 %}
+    <b style="color:{{ 'var(--buy)' if d < -0.5 else ('var(--wait)' if d > 0.5 else 'inherit') }}">{{ '%+.1f'|format(d) }}%</b></div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="chartbar">
+    <div class="seg" role="group" aria-label="Time range">
+      <button type="button" data-r="30" aria-pressed="false">30 days</button>
+      <button type="button" data-r="90" aria-pressed="false">90 days</button>
+      <button type="button" data-r="0" aria-pressed="true">All</button>
+    </div>
+    <div class="legend"><span><i></i>Price</span><span><i class="d"></i>Average</span></div>
+  </div>
+  <div id="chart" role="img" aria-label="Price history chart"><div id="tip"></div></div>
+</div>
+
+<div class="cols">
+  <div class="card">
+    <h3>Add past prices</h3>
+    <p class="muted" style="margin:0 0 12px;font-size:.92rem">Paste one per line as <code>date, price</code> (for example <code>2026-08-01, 5990</code>) or upload a CSV. More history means better advice.</p>
+    <form action="{{ url_for('import_history', pid=product.id) }}" method="post" enctype="multipart/form-data" class="stack" style="--s:12px">
+      <textarea name="history" aria-label="Past prices" placeholder="2026-08-01, 5990&#10;2026-08-15, 5690&#10;2026-09-10, 5390"></textarea>
+      <input type="file" name="history_file" accept=".csv,.txt" aria-label="CSV file">
+      <button class="btn">Import prices</button>
+    </form>
+    {% if is_amazon and asin %}
+    <p class="links">Need real history? See this product's price graph on
+      <a href="https://keepa.com/#!product/{{ 10 if '.in' in product.url else 1 }}-{{ asin }}" target="_blank" rel="noopener">Keepa</a>
+      {% if '.com/' in product.url %} or <a href="https://camelcamelcamel.com/product/{{ asin }}" target="_blank" rel="noopener">CamelCamelCamel</a>{% endif %}
+      and copy the prices here.</p>
+    {% endif %}
+    {% if not has_demo %}
+    <form action="{{ url_for('sample', pid=product.id) }}" method="post" class="row" style="margin-top:12px">
+      <button class="btn quiet sm" title="Adds invented prices, clearly marked, so you can try the chart and advice">Try with sample history</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Add today's price</h3>
+    <p class="muted" style="margin:0 0 12px;font-size:.92rem">Use this when the shop blocks automatic refresh.</p>
+    <form action="{{ url_for('add_manual', pid=product.id) }}" method="post" class="inline">
+      <input type="number" step="0.01" min="0" name="manual_price" required placeholder="Price" aria-label="Price">
+      <button class="btn">Add</button>
+    </form>
+
+    <h3 style="margin-top:24px">Recent records</h3>
+    <table>
+      <tr><th>Date</th><th>Source</th><th>Price</th></tr>
+      {% for t, p, s in history[:8] %}
+      <tr><td>{{ t.strftime('%d %b %Y') }}</td><td class="muted">{{ {'live':'Fetched','manual':'Entered','import':'Imported','demo':'Sample'}[s] }}</td><td>{{ p|money(product.url) }}</td></tr>
+      {% endfor %}
+    </table>
+    <form action="{{ url_for('delete', pid=product.id) }}" method="post" class="row" onsubmit="return confirm('Stop tracking this product and delete its history?')">
+      <button class="btn danger sm">Stop tracking</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ALL = {{ points | tojson }}, SYM = {{ sym | tojson }};
+  var el = document.getElementById('chart'), tip = document.getElementById('tip'), range = 0;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function money(v) {
+    var s = Math.round(v).toString();
+    if (SYM === '₹' && s.length > 3) { var h = s.slice(0, -3), t = s.slice(-3); s = h.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + t; }
+    else s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return SYM + s;
+  }
+  var fmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' });
+  var fmtY = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  function draw() {
+    var pts = ALL;
+    if (range) { var cut = Date.now() - range * 864e5; pts = ALL.filter(function (p) { return p.t >= cut; }); if (pts.length < 2) pts = ALL.slice(-2); }
+    var W = el.clientWidth, H = el.clientHeight, m = { l: 62, r: 14, t: 16, b: 30 };
+    var xs = pts.map(function (p) { return p.t; }), ys = pts.map(function (p) { return p.p; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys);
+    var pad = (hi - lo) * 0.18 || hi * 0.05 || 1; lo -= pad; hi += pad;
+    var avg = ys.reduce(function (a, b) { return a + b; }, 0) / ys.length;
+    function X(t) { return x1 === x0 ? (m.l + (W - m.r)) / 2 : m.l + (t - x0) / (x1 - x0) * (W - m.l - m.r); }
+    function Y(v) { return m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b); }
+    var ink = css('--ink'), mut = css('--muted'), line = css('--line'), tag = css('--tag'), buy = css('--buy'), card = css('--card');
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">';
+    for (var i = 0; i <= 4; i++) {
+      var v = lo + (hi - lo) * i / 4, y = Y(v);
+      s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" stroke="' + line + '"/>' +
+           '<text x="' + (m.l - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="' + mut + '">' + money(v) + '</text>';
+    }
+    var n = Math.min(W < 520 ? 3 : 5, pts.length);
+    for (var j = 0; j < n; j++) {
+      var t = n === 1 ? x0 : x0 + (x1 - x0) * j / (n - 1);
+      s += '<text x="' + X(t) + '" y="' + (H - 8) + '" text-anchor="' + (j === 0 ? 'start' : j === n - 1 ? 'end' : 'middle') + '" font-size="11" fill="' + mut + '">' + fmt.format(t) + '</text>';
+    }
+    s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(avg) + '" y2="' + Y(avg) + '" stroke="' + mut + '" stroke-dasharray="5 5"/>';
+    // stepped line: a price holds until the next record
+    var d = '', area = '';
+    pts.forEach(function (p, k) {
+      d += (k ? 'L' : 'M') + X(p.t) + ' ' + (k ? Y(pts[k - 1].p) + 'L' + X(p.t) + ' ' : '') + Y(p.p);
+    });
+    area = d + 'L' + X(pts[pts.length - 1].t) + ' ' + (H - m.b) + 'L' + X(pts[0].t) + ' ' + (H - m.b) + 'Z';
+    s += '<path d="' + area + '" fill="' + tag + '" opacity=".16"/><path d="' + d + '" fill="none" stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"/>';
+    var li = ys.indexOf(Math.min.apply(null, ys));
+    pts.forEach(function (p, k) {
+      var demo = p.s === 'demo', r = (k === pts.length - 1 || k === li) ? 5.5 : 3;
+      s += '<circle cx="' + X(p.t) + '" cy="' + Y(p.p) + '" r="' + r + '" fill="' + (k === li ? buy : (demo ? card : ink)) + '" stroke="' + (demo ? mut : card) + '" stroke-width="1.6"/>';
+    });
+    s += '<circle id="hov" r="7" fill="none" stroke="' + tag + '" stroke-width="3" style="display:none"/></svg>';
+    el.innerHTML = s + '<div id="tip"></div>'; tip = el.querySelector('#tip');
+    var hov = el.querySelector('#hov');
+    function move(ev) {
+      var r = el.getBoundingClientRect(), px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left, best = 0, bd = 1e12;
+      pts.forEach(function (p, k) { var dd = Math.abs(X(p.t) - px); if (dd < bd) { bd = dd; best = k; } });
+      var p = pts[best];
+      hov.setAttribute('cx', X(p.t)); hov.setAttribute('cy', Y(p.p)); hov.style.display = '';
+      tip.style.display = 'block'; tip.style.left = X(p.t) + 'px'; tip.style.top = Y(p.p) + 'px';
+      tip.textContent = fmtY.format(p.t) + '  ' + money(p.p) + (p.s === 'demo' ? ' (sample)' : '');
+    }
+    el.onmousemove = move; el.ontouchmove = move; el.ontouchstart = move;
+    el.onmouseleave = function () { tip.style.display = 'none'; hov.style.display = 'none'; };
+  }
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      range = +b.dataset.r;
+      document.querySelectorAll('.seg button').forEach(function (o) { o.setAttribute('aria-pressed', o === b); });
+      draw();
+    });
+  });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(draw, 80); });
+  draw();
+})();
+</script>
+{% endblock %}
